@@ -5,6 +5,7 @@
 La-Mulana HD language .dat file encoder and decoder.
 The original script was downloaded from the La-Muana Wikia: http://lamulana-remake.wikia.com/wiki/Text_Dump
 Encoding support added by Alexei Baboulevitch.
+Modding support added by Smurfton.
 """
 
 import codecs, re, unicodedata, mmap
@@ -42,71 +43,78 @@ def decode_block(b):
     d = ""
     while b:
         o = ord(b.pop(0))
-        if o in [0x000A, 0x000C, 0x0020]:
-            # handles LINE FEED, FORM FEED, SPACE
+        if o == 0x000A:
+            s = "{0x%04x}\n" % o
+        elif o in [0x000C, 0x0020]:
+            # handles FORM FEED, SPACE 
             if (o == 0x000C):
                 s = "{FF}"
             else:
-                s = unichr(o)
+                s = chr(o)
         elif o >= 0x0040 and o <= 0x0050:
             s = ""
             if o == 0x0040:
-                cmd = "{FLAG %d:=%d}" % (ord(b[0]), ord(b[1]))
+                cmd = "{FLAG %x:=%x}" % (ord(b[0]), ord(b[1]))
                 b = b[2:]
             elif o == 0x0042:
-                cmd = "{ITEM %d}" % ord(b[0])
+                cmd = "{ITEM %x}" % ord(b[0])
                 b = b[1:]
             elif o == 0x0044:
-                cmd = "{CLS}"
+                cmd = "{CLS}\n\n"
             elif o == 0x0045:
-                cmd = "{BR}"
+                cmd = "\n"
             elif o == 0x0046:
-                cmd = "{POSE %d}" % ord(b[0])
+                cmd = "{POSE %x}" % ord(b[0])
                 b = b[1:]
             elif o == 0x0047:
-                cmd = "{MANTRA %d}" % ord(b[0])
+                cmd = "{MANTRA %x}" % ord(b[0])
                 b = b[1:]
             elif o == 0x004a:
                 colors = [ord(x) for x in b[:3]]
-                cmd = "{COL %03d-%03d-%03d}" % tuple(colors)
+                cmd = "{COL %02x-%02x-%02x}" % tuple(colors)
                 b = b[3:] #TODO: colors not verified
             elif o == 0x004e:
                 lenopts = ord(b[0])
-                opts = ["%d" % ord(x) for x in b[1:lenopts+1]]
+                opts = ["%04x" % ord(x) for x in b[1:lenopts+1]]
                 cmd = "{CMD %s}" % "-".join(opts)
                 b = b[lenopts+1:]
             elif o == 0x004f:
-                cmd = "{SCENE %d}" % ord(b[0])
+                cmd = "{SCENE %x}" % ord(b[0])
                 b = b[1:]
             else:
-                cmd = "{UNK %02x}" % o
-                assert False
+                cmd = "{0x%04x}" % o
+                # assert False # nope.
+                print("Unrecognized character.")
             s = cmd
         elif o >= 0x0100 and o <= 0x05c0:
             s = font00[o-0x0100]
         elif o == 0x05c1:
-            s = "{UN"
+            s = "{UN}"
         elif o == 0x05c2:
-            s = "DEFI"
+            s = "{DEFI}"
         elif o == 0x05c3:
-            s = "NED}"
+            s = "{NED}"
         else:
-            s = "{UNK %04x}" % o
-            assert False
+            s = "{0x%04x}" % o
+            # assert False # nope.
+            print("Unrecognized character.")
         d += s
     return d
 
 def encode_block(block):
-    special_regex = r"^{([a-zA-Z]+)( (.*?))?}"
-    flag_regex = r"(\d+):=(\d+)"
-    color_regex = r"(\d+)-(\d+)-(\d+)"
-    cmd_regex = r"(\d+)-?"
-
+    special_regex = r"^{([a-zA-Z]+)(\s(.*?))?}"
+    flag_regex = r"([0-9a-f]+):=([0-9a-f]+)"
+    color_regex = r"([0-9a-f]+)-([0-9a-f]+)-([0-9a-f]+)"
+    cmd_regex = r"([0-9a-f]+)-?"
+    hex_regex = r"^{(?:0x)?([0-9a-f]{1,4})}"
     output = []
     count = 0
 
     while len(block) > 0:
         match = re.match(special_regex, block)
+        hex_match = re.match(hex_regex, block)
+        # lenbuf is used for when commands get filler after them (for readability)
+        lenbuf = 0
         if match is not None:
             command = match.group(1)
             parameters = match.group(3)
@@ -118,29 +126,28 @@ def encode_block(block):
                 assert param_match is not None
 
                 output.append(0x0040)
-                output.append(int(param_match.group(1)))
-                output.append(int(param_match.group(2)))
+                output.append(int(param_match.group(1), base=16))
+                output.append(int(param_match.group(2), base=16))
             elif command == "ITEM":
                 output.append(0x0042)
-                output.append(int(parameters))
+                output.append(int(parameters, base=16))
             elif command == "CLS":
                 output.append(0x0044);
-            elif command == "BR":
-                output.append(0x0045);
+                lenbuf = 2
             elif command == "POSE":
                 output.append(0x0046)
-                output.append(int(parameters))
+                output.append(int(parameters, base=16))
             elif command == "MANTRA":
                 output.append(0x0047)
-                output.append(int(parameters))
+                output.append(int(parameters, base=16))
             elif command == "COL":
                 param_match = re.match(color_regex, parameters)
                 assert param_match is not None
 
                 output.append(0x004a)
-                output.append(int(param_match.group(1)))
-                output.append(int(param_match.group(2)))
-                output.append(int(param_match.group(3)))
+                output.append(int(param_match.group(1), base=16))
+                output.append(int(param_match.group(2), base=16))
+                output.append(int(param_match.group(3), base=16))
             elif command == "CMD":
                 command_output = []
                 command_output.append(0x004e)
@@ -150,7 +157,7 @@ def encode_block(block):
                     param_match = re.match(cmd_regex, parameters)
                     assert param_match is not None
 
-                    command_output.append(int(param_match.group(1)))
+                    command_output.append(int(param_match.group(1), base = 16))
                     parameters = parameters[len(param_match.group(0)):]
                     count += 1
 
@@ -159,15 +166,30 @@ def encode_block(block):
                 output += command_output
             elif command == "SCENE":
                 output.append(0x004f)
-                output.append(int(parameters))
-            elif command == "UNDEFINED":
+                output.append(int(parameters, base=16))
+            elif command == "UN":
                 output.append(0x05c1)
+            elif command == "DEFI":
                 output.append(0x05c2)
+            elif command == "NED":
                 output.append(0x05c3)
-
+            
             # not handling UNK characters since they haven't appeared in my input
+            # Handling UNK characters for modding purposes. -Smurfton
 
-            block = block[len(match.group(0)):]
+            block = block[len(match.group(0)) + lenbuf:]
+            
+        
+        elif hex_match is not None:
+            output.append(int(hex_match.group(1), base=16))
+            
+            if int(hex_match.group(1), base=16) == 0x0A:
+                lenbuf = 1
+                    
+            block = block[len(hex_match.group(0)) + lenbuf:]
+        elif block[0] == '\n':
+            output.append(0x0045);
+            block = block[1:]
         else:
             char_ord = ord(block[0])
 
@@ -193,9 +215,9 @@ def decode(fin, fout):
         o = ord(c)
         assert o % 2 == 0
 
-        b = fin.read(o/2)
+        b = fin.read(o//2)
 
-        block_header = "-" * 40 + " " + "BLOCK %d (%d) START" % (count, o/2)
+        block_header = "-" * 40 + " " + "BLOCK %d (%d) START" % (count, o//2)
         block_footer = "-" * 40 + " " + "BLOCK %d END" % (count)
 
         fout.write("%s\n%s\n%s\n" % (block_header, decode_block(b), block_footer))
@@ -227,21 +249,22 @@ def encode(fin, fout):
 
         encoded_blocks += encoded_block
 
+    
     encoded_blocks_string = ""
 
     for char in encoded_blocks:
-        encoded_blocks_string += unichr(char)
+        encoded_blocks_string += chr(char)
 
     fout.write(encoded_blocks_string)
 
-# with codecs.open("script_code.dat", "r", "utf_16_be") as fin:
-#     with codecs.open("script_out_cmd.txt", "w", "utf_8") as fout:
-#         decode(fin, fout)
-
-# with codecs.open("script_out_cmd.txt", "r", "utf_8") as fin:
-#     with codecs.open("script_code_new.dat", "w", "utf_16_be") as fout:
-#         encode(fin, fout)
-
-# with codecs.open("script_code_new.dat", "r", "utf_16_be") as fin:
-#     with codecs.open("script_out_new_cmd.txt", "w", "utf_8") as fout:
-#         decode(fin, fout)
+##with codecs.open("script_code.dat", "r", "utf_16_be") as fin:
+##    with codecs.open("script_out_cmd.txt", "w", "utf_8") as fout:
+##        decode(fin, fout)
+##
+##with codecs.open("script_out_cmd.txt", "r", "utf_8") as fin:
+##    with codecs.open("script_code_new.dat", "w", "utf_16_be") as fout:
+##        encode(fin, fout)
+##
+##with codecs.open("script_code_new.dat", "r", "utf_16_be") as fin:
+##    with codecs.open("script_out_new_cmd.txt", "w", "utf_8") as fout:
+##        decode(fin, fout)
