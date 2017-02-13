@@ -102,11 +102,12 @@ def decode_block(b):
     return d
 
 def encode_block(block):
+	
     special_regex = r"^{([a-zA-Z]+)(\s(.*?))?}"
-    flag_regex = r"([0-9a-f]+):=([0-9a-f]+)"
-    color_regex = r"([0-9a-f]+)-([0-9a-f]+)-([0-9a-f]+)"
-    cmd_regex = r"([0-9a-f]+)-?"
-    hex_regex = r"^{(?:0x)?([0-9a-f]{1,4})}"
+    flag_regex = r"([0-9a-fA-F]+):=([0-9a-fA-F]+)"
+    color_regex = r"([0-9a-fA-F]+)-([0-9a-fA-F]+)-([0-9a-fA-F]+)"
+    cmd_regex = r"([0-9a-fA-F]+)-?"
+    hex_regex = r"^{(?:0x)?([0-9a-fA-F]{1,4})}"
     newline_regex = "^\n*"
     output = []
     count = 0
