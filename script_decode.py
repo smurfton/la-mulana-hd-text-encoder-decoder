@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 
 """
-La-Mulana HD language .dat file encoder and decoder.
+La-Mulana Remake language .dat file encoder and decoder.
 The original script was downloaded from the La-Muana Wikia: http://lamulana-remake.wikia.com/wiki/Text_Dump
 Encoding support added by Alexei Baboulevitch.
 Modding support added by Smurfton.
 """
 
-import codecs, re, unicodedata, mmap
+import os, codecs, re, unicodedata, mmap
 
 font00 = \
         u"!\"&'(),-./0123456789:?ABCDEFGHIJKLMNOPQRSTUVWXYZ"\
@@ -107,6 +107,7 @@ def encode_block(block):
     color_regex = r"([0-9a-f]+)-([0-9a-f]+)-([0-9a-f]+)"
     cmd_regex = r"([0-9a-f]+)-?"
     hex_regex = r"^{(?:0x)?([0-9a-f]{1,4})}"
+    newline_regex = "^\n*"
     output = []
     count = 0
 
@@ -133,7 +134,8 @@ def encode_block(block):
                 output.append(int(parameters, base=16))
             elif command == "CLS":
                 output.append(0x0044);
-                lenbuf = 2
+                newline_match = re.match(newline_regex, block[len(match.group(0)):])
+                lenbuf = len(newline_match.group(0))
             elif command == "POSE":
                 output.append(0x0046)
                 output.append(int(parameters, base=16))
@@ -184,7 +186,8 @@ def encode_block(block):
             output.append(int(hex_match.group(1), base=16))
             
             if int(hex_match.group(1), base=16) == 0x0A:
-                lenbuf = 1
+                newline_match = re.match(newline_regex, block[len(hex_match.group(0)):])
+                lenbuf = len(newline_match.group(0))
                     
             block = block[len(hex_match.group(0)) + lenbuf:]
         elif block[0] == '\n':
@@ -257,14 +260,22 @@ def encode(fin, fout):
 
     fout.write(encoded_blocks_string)
 
-##with codecs.open("script_code.dat", "r", "utf_16_be") as fin:
-##    with codecs.open("script_out_cmd.txt", "w", "utf_8") as fout:
-##        decode(fin, fout)
-##
-##with codecs.open("script_out_cmd.txt", "r", "utf_8") as fin:
-##    with codecs.open("script_code_new.dat", "w", "utf_16_be") as fout:
-##        encode(fin, fout)
-##
-##with codecs.open("script_code_new.dat", "r", "utf_16_be") as fin:
-##    with codecs.open("script_out_new_cmd.txt", "w", "utf_8") as fout:
-##        decode(fin, fout)
+
+dir_ = os.path.dirname(__file__)
+if not os.path.exists(os.path.join(dir_, "out")):
+    os.makedirs(os.path.join(dir_, "out"))
+try:    
+    with codecs.open("script_out.txt", "r", "utf_8") as fin:
+        with codecs.open(os.path.join(dir_,"out","script_code.dat"), "w", "utf_16_be") as fout:
+            encode(fin, fout)
+    print("Encoded.")
+except:
+    print("Did Not Encode -- No script_out.txt")
+try:
+    with codecs.open("script_code.dat", "r", "utf_16_be") as fin:
+        with codecs.open(os.path.join(dir_,"out","script_out.txt"), "w", "utf_8") as fout:
+            decode(fin, fout)
+    print("Decoded.")
+except:
+    print("Did Not Decode -- No script_code.dat")
+
