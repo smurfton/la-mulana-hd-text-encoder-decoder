@@ -167,6 +167,8 @@ def encode_block(block):
                 command_output.insert(1, count)
 
                 output += command_output
+
+                # Only used to start credits
             elif command == "SCENE":
                 output.append(0x004f)
                 output.append(int(parameters, base=16))
@@ -221,8 +223,8 @@ def decode(fin, fout):
 
         b = fin.read(o//2)
 
-        block_header = "-" * 40 + " " + "BLOCK %d (%d) START" % (count, o//2)
-        block_footer = "-" * 40 + " " + "BLOCK %d END" % (count)
+        block_header = "-" * 40 + " " + "BLOCK %x (%x) START" % (count, o//2)
+        block_footer = "-" * 40 + " " + "BLOCK %x END" % (count)
 
         fout.write("%s\n%s\n%s\n" % (block_header, decode_block(b), block_footer))
         
@@ -231,20 +233,20 @@ def decode(fin, fout):
     assert count == blocks
 
 def encode(fin, fout):
-    block_regex = r"-+ BLOCK (\d+) \((\d+)\) START\n(.*?)\n-+ BLOCK (\d+) END"
+    block_regex = r"-+ BLOCK ([0-fA-F]+) \(([0-fA-F]+)\) START\n(.*?)\n-+ BLOCK ([0-fA-F]+) END"
 
     fin_string = linestring = fin.read();
     block_matches = re.findall(block_regex, fin_string, re.DOTALL)
 
-    last_block_number = int(block_matches[-1][0]) + 1
+    last_block_number = int(block_matches[-1][0], 16) + 1
     assert len(block_matches) == last_block_number
 
     encoded_blocks = [len(block_matches)]
 
     for block_match in block_matches:
-        block_num = int(block_match[0])
-        block_len = int(block_match[1])
-        block_end_num = int(block_match[3])
+        block_num = int(block_match[0], 16)
+        block_len = int(block_match[1], 16)
+        block_end_num = int(block_match[3], 16)
 
         assert block_num == block_end_num
 
@@ -271,12 +273,12 @@ try:
             encode(fin, fout)
     print("Encoded.")
 except:
-    print("Did Not Encode -- No script_out.txt")
+    print("Did Not Encode")
 try:
     with codecs.open("script_code.dat", "r", "utf_16_be") as fin:
         with codecs.open(os.path.join(dir_,"out","script_out.txt"), "w", "utf_8") as fout:
             decode(fin, fout)
     print("Decoded.")
 except:
-    print("Did Not Decode -- No script_code.dat")
+    print("Did Not Decode")
 
